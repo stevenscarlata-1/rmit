@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assessor Guide Converter</title>
+<meta name="description" content="Convert a TVSC assessor guide (.docx) into the RMIT assessor guide template, keeping every section.">
+<style>
+  :root {
+    --bg: #f6f6f7; --panel: #ffffff; --text: #1d1d1f; --muted: #5f6368;
+    --line: #dcdce0; --accent: #e60028; --accent-ink: #ffffff; --ok: #1e7b34; --warn: #a15c00;
+    --field: #ffffff; --soft: #f0f0f2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151517; --panel: #1f1f22; --text: #ececee; --muted: #a2a2a8;
+      --line: #36363b; --accent: #ff3b55; --accent-ink: #ffffff; --ok: #5cc879; --warn: #e5a54a;
+      --field: #26262a; --soft: #2a2a2e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Calibri, Arial, sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { display: flex; align-items: center; gap: 12px; padding-top: 14px; padding-bottom: 14px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); flex: none; }
+  h1 { font-size: 18px; margin: 0; }
+  main { padding: 24px 0 48px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; gap: 8px; align-items: baseline; }
+  .step { color: var(--muted); font-weight: 600; font-size: 13px; }
+  p.lead { margin: 0 0 4px; color: var(--muted); }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 28px 16px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--soft); }
+  .drop strong { display: block; margin-bottom: 4px; }
+  .drop small { color: var(--muted); }
+  .file { margin-top: 10px; font-size: 14px; color: var(--muted); word-break: break-all; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--field); color: var(--text); font: inherit; }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .full { grid-column: 1 / -1; }
+  input, textarea { min-width: 0; max-width: 100%; }
+  .grid > div { min-width: 0; }
+  code { word-break: break-all; }
+  .pair { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: center; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 11px 18px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.link { background: none; color: var(--muted); padding: 4px 0; font-weight: 500; text-decoration: underline; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  textarea { width: 100%; min-height: 70px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--field); color: var(--text); font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+  ol.outline { margin: 8px 0 0; padding-left: 0; list-style: none; max-height: 280px; overflow: auto; font-size: 14px; }
+  ol.outline li { padding: 2px 0; }
+  ol.outline li.l1 { font-weight: 700; margin-top: 6px; }
+  ol.outline li.l2 { padding-left: 16px; }
+  ol.outline li.l3 { padding-left: 32px; color: var(--muted); }
+  .result { display: none; }
+  .result.show { display: block; }
+  .checks { list-style: none; padding: 0; margin: 0 0 8px; }
+  .checks li { padding: 3px 0; overflow-wrap: anywhere; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  .error { color: var(--accent); font-weight: 600; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; padding-bottom: 24px; }
+</style>
+</head>
+<body>
+<header><div class="wrap"><span class="dot" aria-hidden="true"></span><h1>Assessor Guide Converter: TVSC to RMIT</h1></div></header>
+
+<main class="wrap">
+  <section class="card">
+    <h2><span class="step">1</span> TVSC assessor guide</h2>
+    <p class="lead">Every section, table and list in the TVSC guide is carried over in the same order and wording. Only the branding changes: the RMIT letterhead, cover table, footer and styling are applied.</p>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a TVSC .docx file">
+      <strong>Drop the TVSC .docx here</strong>
+      <small>or click to choose a file. It stays on your computer and is never uploaded.</small>
+    </div>
+    <input type="file" id="fileInput" accept=".docx" hidden>
+    <div class="file" id="fileName"></div>
+    <div class="error" id="loadError"></div>
+  </section>
+
+  <section class="card" id="detailsCard" hidden>
+    <h2><span class="step">2</span> Cover details</h2>
+    <p class="lead">These were read from the TVSC guide. Check them and fill in the RMIT codes.</p>
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label for="taskNumber">Task number</label>
+        <div class="pair"><input type="text" id="taskNumber"><span>of</span><input type="text" id="taskTotal" placeholder="total"></div>
+      </div>
+      <div><label for="taskName">Task name</label><input type="text" id="taskName"></div>
+      <div><label for="unitCodes">National unit/s code</label><input type="text" id="unitCodes"></div>
+      <div><label for="unitTitles">National unit/s title</label><input type="text" id="unitTitles"></div>
+      <div><label for="qualCode">National qualification code</label><input type="text" id="qualCode"></div>
+      <div><label for="qualTitle">National qualification title</label><input type="text" id="qualTitle"></div>
+      <div><label for="programCode">RMIT Program code</label><input type="text" id="programCode"></div>
+      <div><label for="courseCode">RMIT Course code</label><input type="text" id="courseCode"></div>
+      <div class="full"><label for="footerLine">Footer line</label><input type="text" id="footerLine">
+        <div class="hint">Replaces “UoC code – AT# Practical – Month Year” in the RMIT footer.</div></div>
+      <div class="full"><label for="fileOut">Output file name</label><input type="text" id="fileOut"></div>
+    </div>
+
+    <details>
+      <summary>Sections found in the TVSC guide (<span id="headingCount">0</span>)</summary>
+      <ol class="outline" id="outline"></ol>
+    </details>
+    <details>
+      <summary>Optional: find and replace text</summary>
+      <p class="hint">One per line, as <code>find =&gt; replace</code>, for example <code>Resources supplied TAFE =&gt; Resources supplied by RMIT</code>. Leave empty to keep the TVSC wording exactly.</p>
+      <textarea id="replacements" spellcheck="false"></textarea>
+    </details>
+    <details>
+      <summary>Advanced: use a different RMIT template</summary>
+      <p class="hint">By default the bundled RMIT assessor guide (practical task) template is used.</p>
+      <input type="file" id="templateInput" accept=".docx">
+      <div class="file" id="templateName"></div>
+    </details>
+  </section>
+
+  <section class="card" id="convertCard" hidden>
+    <h2><span class="step">3</span> Convert</h2>
+    <div class="row">
+      <button id="convertBtn">Convert and download .docx</button>
+      <button class="link" id="resetBtn" type="button">Start again</button>
+    </div>
+    <div class="error" id="convertError"></div>
+    <div class="result" id="result" style="margin-top:14px">
+      <ul class="checks" id="checks"></ul>
+    </div>
+  </section>
+</main>
+
+<footer>Conversion runs entirely in your browser. No documents leave your computer.</footer>
+
+<script src="vendor/jszip.min.js"></script>
+<script src="converter.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const FIELDS = ['taskNumber','taskTotal','taskName','unitCodes','unitTitles','qualCode','qualTitle','programCode','courseCode','footerLine','fileOut'];
+  let tvscBytes = null, customTemplate = null;
+
+  const drop = $('drop'), fileInput = $('fileInput');
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', () => fileInput.files[0] && load(fileInput.files[0]));
+
+  $('templateInput').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    customTemplate = await f.arrayBuffer();
+    $('templateName').textContent = 'Using template: ' + f.name;
+  });
+
+  async function load(file) {
+    $('loadError').textContent = ''; $('result').classList.remove('show'); $('convertError').textContent = '';
+    if (!/\.docx$/i.test(file.name)) { $('loadError').textContent = 'Please choose a .docx file. Older .doc files need to be re-saved as .docx first.'; return; }
+    try {
+      tvscBytes = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(tvscBytes);
+      if (!zip.file('word/document.xml')) throw new Error('This file does not look like a Word document.');
+      const info = await AssessorConverter.extractInfo(zip);
+      info.footerLine = AssessorConverter.defaultFooter(info);
+      info.fileOut = AssessorConverter.defaultFileName(info);
+      for (const k of FIELDS) $(k).value = info[k] || '';
+      const ol = $('outline'); ol.innerHTML = '';
+      for (const h of info.headings) { const li = document.createElement('li'); li.className = 'l' + Math.min(h.level, 3); li.textContent = h.text; ol.appendChild(li); }
+      $('headingCount').textContent = info.headings.length;
+      $('fileName').textContent = 'Loaded: ' + file.name;
+      $('detailsCard').hidden = false; $('convertCard').hidden = false;
+    } catch (err) {
+      console.error(err); $('loadError').textContent = 'Could not read this file: ' + err.message;
+    }
+  }
+
+  for (const k of ['taskNumber','taskName','unitCodes']) $(k).addEventListener('change', () => {
+    const info = Object.fromEntries(FIELDS.map((f) => [f, $(f).value.trim()]));
+    $('fileOut').value = AssessorConverter.defaultFileName(info);
+    $('footerLine').value = AssessorConverter.defaultFooter(info);
+  });
+
+  $('convertBtn').addEventListener('click', async () => {
+    const btn = $('convertBtn'); btn.disabled = true; $('convertError').textContent = '';
+    try {
+      const info = Object.fromEntries(FIELDS.map((f) => [f, $(f).value.trim()]));
+      const replacements = $('replacements').value.split('\n').map((l) => l.split('=>')).filter((p) => p.length === 2 && p[0].trim())
+        .map(([find, replace]) => ({ find: find.trim(), replace: replace.trim() }));
+      let tplBytes = customTemplate;
+      if (!tplBytes) {
+        const res = await fetch('template/rmit-assessor-guide-template.docx');
+        if (!res.ok) throw new Error('Could not load the RMIT template (' + res.status + '). If you opened this page as a local file, use the hosted version or choose the template under "Advanced".');
+        tplBytes = await res.arrayBuffer();
+      }
+      const tv = await JSZip.loadAsync(tvscBytes);
+      const tp = await JSZip.loadAsync(tplBytes);
+      const { zip, report } = await AssessorConverter.convert(tv, tp, info, { replacements });
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      let name = info.fileOut || 'Assessor_Guide.docx'; if (!/\.docx$/i.test(name)) name += '.docx';
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      showReport(report, name);
+    } catch (err) {
+      console.error(err); $('convertError').textContent = 'Conversion failed: ' + err.message;
+    } finally { btn.disabled = false; }
+  });
+
+  function showReport(r, name) {
+    const ul = $('checks'); ul.innerHTML = '';
+    const add = (cls, text) => { const li = document.createElement('li'); li.className = cls; li.textContent = text; ul.appendChild(li); };
+    add('ok', '✓ Downloaded ' + name);
+    const same = (a) => a.source === a.output;
+    add(same(r.paragraphs) ? 'ok' : 'warn', (same(r.paragraphs) ? '✓ ' : '! ') + `Paragraphs: ${r.paragraphs.output} of ${r.paragraphs.source} carried over`);
+    add(same(r.tables) ? 'ok' : 'warn', (same(r.tables) ? '✓ ' : '! ') + `Tables: ${r.tables.output} of ${r.tables.source} carried over`);
+    if (r.textIdentical === true) add('ok', `✓ Text is identical to the TVSC guide (${r.words.source.toLocaleString()} words)`);
+    else if (r.textIdentical === false) add('warn', `! Text differs from the TVSC guide (${r.words.output} of ${r.words.source} words)`);
+    else add('ok', `✓ ${r.words.output.toLocaleString()} words, with your find/replace rules applied`);
+    add('ok', '✓ TVSC cover page replaced by the RMIT cover table');
+    for (const w of r.warnings) add('warn', '! ' + w);
+    $('result').classList.add('show');
+  }
+
+  $('resetBtn').addEventListener('click', () => location.reload());
+})();
+</script>
+</body>
+</html>
