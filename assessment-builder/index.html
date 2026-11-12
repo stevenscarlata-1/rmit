@@ -55,6 +55,9 @@
   .grid > div { min-width: 0; }
   @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
   .full { grid-column: 1 / -1; }
+  .unitpick { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  select { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--text); font: inherit; }
+  select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
   label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
   input[type=text], input[type=number] { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
     background: var(--field); color: var(--text); font: inherit; }
@@ -114,6 +117,11 @@
     <section class="card">
       <h2><span class="step">2</span> Details</h2>
       <p class="lead">Used on the cover page, in the footer and in the file name. Your entries are remembered on this computer.</p>
+      <div class="unitpick">
+        <label for="unitSelect">Unit</label>
+        <select id="unitSelect"><option value="">Loading units…</option></select>
+        <div class="hint">Choosing a unit fills in the details below. You can still edit them. To add or change units, edit <code>assessment-builder/data/units.csv</code>.</div>
+      </div>
       <div class="grid">
         <div><label for="unitCode">National unit code</label><input type="text" id="unitCode" placeholder="VU23735"></div>
         <div><label for="assessmentTask">Assessment task</label><input type="text" id="assessmentTask" placeholder="AT2"></div>
@@ -121,6 +129,7 @@
         <div><label for="qualCode">National qualification code</label><input type="text" id="qualCode" placeholder="22682VIC"></div>
         <div><label for="programCode">RMIT Program code</label><input type="text" id="programCode" placeholder="C2229"></div>
         <div class="full"><label for="qualTitle">National qualification title</label><input type="text" id="qualTitle" placeholder="Certificate II in Electrotechnology (Pre-vocational)"></div>
+        <div class="full"><label for="courseCode">RMIT Course code</label><input type="text" id="courseCode" placeholder="EEET7610, EEET7611"></div>
         <div class="full"><label for="footerLine">Footer line</label><input type="text" id="footerLine">
           <div class="hint">Filled in automatically as “unit | task | Student appendices”. You can change it.</div></div>
         <div class="full"><label for="fileName">File name (combined)</label><input type="text" id="fileName"></div>
@@ -294,7 +303,7 @@
   $('clearBtn').addEventListener('click', () => { docs = []; $('checks').innerHTML = ''; render(); });
 
   // ---------- details (remembered on this computer)
-  const FIELDS = ['unitCode', 'assessmentTask', 'unitTitle', 'qualCode', 'programCode', 'qualTitle'];
+  const FIELDS = ['unitCode', 'assessmentTask', 'unitTitle', 'qualCode', 'programCode', 'qualTitle', 'courseCode'];
   for (const f of FIELDS) {
     const v = store.get(f); if (v) $(f).value = v;
     $(f).addEventListener('input', () => { store.set(f, $(f).value); autoFill(); });
@@ -314,6 +323,52 @@
     if (!fileEdited) $('fileName').value = Appendices.defaultFileName(i);
   }
   autoFill();
+
+  // ---------- unit list (data/units.csv)
+  const UNIT_COLS = { unit_code: 'unitCode', unit_title: 'unitTitle', qualification_code: 'qualCode', qualification_title: 'qualTitle', program_code: 'programCode', course_code: 'courseCode' };
+  let units = [];
+  function parseCsv(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    text = text.replace(/^\uFEFF/, '');
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    const head = (rows.shift() || []).map((h) => h.trim().toLowerCase());
+    return rows.filter((r) => r.some((c) => c.trim())).map((r) => {
+      const o = {}; head.forEach((h, i) => { if (UNIT_COLS[h]) o[UNIT_COLS[h]] = (r[i] || '').trim(); }); return o;
+    }).filter((u) => u.unitCode);
+  }
+  async function loadUnits() {
+    const sel = $('unitSelect');
+    try {
+      const res = await fetch('data/units.csv?v=' + Date.now());
+      if (!res.ok) throw new Error(res.status);
+      units = parseCsv(await res.text()).sort((a, b) => a.unitCode.localeCompare(b.unitCode));
+      sel.innerHTML = '<option value="">Choose a unit…</option>' + units.map((u, i) =>
+        `<option value="${i}">${escapeHtml(u.unitCode)} – ${escapeHtml(u.unitTitle || '')}</option>`).join('');
+      const cur = units.findIndex((u) => u.unitCode === $('unitCode').value.trim());
+      if (cur >= 0) sel.value = String(cur);
+    } catch (err) {
+      sel.innerHTML = '<option value="">Unit list unavailable – type the details below</option>';
+    }
+  }
+  $('unitSelect').addEventListener('change', () => {
+    const u = units[+$('unitSelect').value];
+    if (!u) return;
+    for (const k of Object.values(UNIT_COLS)) { $(k).value = u[k] || ''; store.set(k, $(k).value); }
+    autoFill();
+  });
+  $('unitCode').addEventListener('input', () => {
+    const i = units.findIndex((u) => u.unitCode === $('unitCode').value.trim());
+    $('unitSelect').value = i >= 0 ? String(i) : '';
+  });
+  loadUnits();
 
   // ---------- options
   $('optHeadings').addEventListener('change', () => {
