@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RMIT Assessment Builder</title>
+<meta name="description" content="Convert and combine documents into RMIT branded assessment documents and student appendices, in the browser.">
+<style>
+  :root {
+    --bg: #f6f6f7; --panel: #ffffff; --text: #1d1d1f; --muted: #5f6368;
+    --line: #dcdce0; --accent: #e60028; --accent-ink: #ffffff; --ok: #1e7b34; --warn: #a15c00;
+    --field: #ffffff; --soft: #f0f0f2; --chip: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151517; --panel: #1f1f22; --text: #ececee; --muted: #a2a2a8;
+      --line: #36363b; --accent: #ff3b55; --accent-ink: #ffffff; --ok: #5cc879; --warn: #e5a54a;
+      --field: #26262a; --soft: #2a2a2e; --chip: #2b2f36;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Calibri, Arial, sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { display: flex; align-items: center; gap: 12px; padding-top: 14px; padding-bottom: 0; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); flex: none; }
+  h1 { font-size: 18px; margin: 0; }
+  nav { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; }
+  nav button { background: none; color: var(--muted); border: 0; border-bottom: 3px solid transparent; border-radius: 0;
+    padding: 10px 12px; font-weight: 600; white-space: nowrap; }
+  nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  nav .soon { font-size: 11px; font-weight: 600; background: var(--chip); color: var(--muted); border-radius: 10px; padding: 1px 7px; margin-left: 4px; }
+  main { padding: 24px 0 48px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; gap: 8px; align-items: baseline; }
+  .step { color: var(--muted); font-weight: 600; font-size: 13px; }
+  p.lead { margin: 0 0 10px; color: var(--muted); }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 24px 16px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--soft); }
+  .drop strong { display: block; margin-bottom: 4px; }
+  .drop small { color: var(--muted); }
+  .docs { list-style: none; margin: 12px 0 0; padding: 0; }
+  .doc { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 10px; align-items: center;
+    padding: 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
+  .doc.dragging { opacity: .5; }
+  .doc .num { font-weight: 700; color: var(--muted); min-width: 92px; font-size: 13px; }
+  .doc .fname { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .doc .acts { display: flex; gap: 4px; }
+  .icon { background: var(--soft); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; font-weight: 600; line-height: 1.2; }
+  .icon:disabled { opacity: .35; }
+  @media (max-width: 620px) { .doc { grid-template-columns: minmax(0,1fr) auto; } .doc .num { grid-column: 1 / -1; } }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .grid > div { min-width: 0; }
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  input[type=text], input[type=number] { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--field); color: var(--text); font: inherit; }
+  input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+  legend { font-size: 13px; font-weight: 700; margin-bottom: 6px; padding: 0; }
+  .opt { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-size: 14px; font-weight: 400; }
+  .opt input { margin-top: 3px; }
+  .opt span small { display: block; color: var(--muted); font-size: 12px; }
+  .inline { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 0 26px; }
+  .inline > div { width: 150px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 11px 18px; cursor: pointer; background: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.link { background: none; color: var(--muted); padding: 4px 0; font-weight: 500; text-decoration: underline; }
+  button.secondary { background: var(--soft); color: var(--text); border: 1px solid var(--line); padding: 8px 12px; font-size: 14px; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  code { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; overflow-wrap: anywhere; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .checks { list-style: none; padding: 0; margin: 14px 0 0; }
+  .checks li { padding: 3px 0; overflow-wrap: anywhere; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  .error { color: var(--accent); font-weight: 600; margin-top: 8px; }
+  .empty { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; padding-bottom: 24px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand"><span class="dot" aria-hidden="true"></span><h1>RMIT Assessment Builder</h1></div>
+    <nav role="tablist" aria-label="Tools">
+      <button role="tab" id="tab-appendices" aria-selected="true" aria-controls="panel-appendices">Student appendices</button>
+      <button role="tab" id="tab-assessment" aria-selected="false" aria-controls="panel-assessment">Assessment converter<span class="soon">next</span></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ===================== STUDENT APPENDICES ===================== -->
+  <div id="panel-appendices" role="tabpanel" aria-labelledby="tab-appendices">
+    <section class="card">
+      <h2><span class="step">1</span> Documents</h2>
+      <p class="lead">Add one or more Word documents. Drag them, or use the arrows, to set the appendix order. Each title becomes its appendix heading.</p>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add .docx files">
+        <strong>Drop .docx files here</strong>
+        <small>or click to choose. Files stay on your computer and are never uploaded.</small>
+      </div>
+      <input type="file" id="fileInput" accept=".docx" multiple hidden>
+      <ol class="docs" id="docs"></ol>
+      <p class="empty" id="emptyMsg">No documents added yet.</p>
+      <div class="error" id="addError"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">2</span> Details</h2>
+      <p class="lead">Used on the cover page, in the footer and in the file name. Your entries are remembered on this computer.</p>
+      <div class="grid">
+        <div><label for="unitCode">National unit code</label><input type="text" id="unitCode" placeholder="VU23735"></div>
+        <div><label for="assessmentTask">Assessment task</label><input type="text" id="assessmentTask" placeholder="AT2"></div>
+        <div class="full"><label for="unitTitle">National unit title</label><input type="text" id="unitTitle" placeholder="Install sustainable extra low voltage energy supply systems"></div>
+        <div><label for="qualCode">National qualification code</label><input type="text" id="qualCode" placeholder="22682VIC"></div>
+        <div><label for="programCode">RMIT Program code</label><input type="text" id="programCode" placeholder="C2229"></div>
+        <div class="full"><label for="qualTitle">National qualification title</label><input type="text" id="qualTitle" placeholder="Certificate II in Electrotechnology (Pre-vocational)"></div>
+        <div class="full"><label for="footerLine">Footer line</label><input type="text" id="footerLine">
+          <div class="hint">Filled in automatically as “unit | task | Student appendices”. You can change it.</div></div>
+        <div class="full"><label for="fileName">File name (combined)</label><input type="text" id="fileName"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">3</span> Options</h2>
+      <fieldset>
+        <legend>Output</legend>
+        <label class="opt"><input type="radio" name="combine" value="yes" checked><span>Combine into one file<small>All documents in one RMIT branded file, in the order above.</small></span></label>
+        <label class="opt"><input type="radio" name="combine" value="no"><span>Convert each separately<small>One RMIT branded file per document, downloaded together as a .zip.</small></span></label>
+      </fieldset>
+      <fieldset>
+        <legend>Cover page</legend>
+        <label class="opt"><input type="checkbox" id="optCover" checked><span>Add the cover page<small>Details table, student instructions, list of appendices and declaration.</small></span></label>
+      </fieldset>
+      <fieldset>
+        <legend>Appendix headings</legend>
+        <label class="opt"><input type="checkbox" id="optHeadings" checked><span>Start each document with “APPENDIX N: title” on a new page</span></label>
+        <div class="inline" id="headingOpts">
+          <div><label for="headingWord">Heading word</label><input type="text" id="headingWord" value="APPENDIX"></div>
+          <div><label for="startAt">Start numbering at</label><input type="number" id="startAt" value="1" min="0"></div>
+        </div>
+        <label class="opt" id="pageBreakOpt" hidden><input type="checkbox" id="optPageBreaks" checked><span>Start each document on a new page</span></label>
+      </fieldset>
+      <fieldset>
+        <legend>Formatting</legend>
+        <label class="opt"><input type="radio" name="restyle" value="yes" checked><span>Apply RMIT style<small>RMIT fonts, headings and tables (grey header rows). Text, lists, images and links are unchanged.</small></span></label>
+        <label class="opt"><input type="radio" name="restyle" value="no"><span>Keep original formatting<small>Only the RMIT header, footer and cover page are added.</small></span></label>
+      </fieldset>
+      <details>
+        <summary>Cover page template</summary>
+        <p class="hint">The default cover comes from the VU23735 AT2 student appendices. To use your own, edit a copy in Word, keep the <code>{{fields}}</code> where details should go, and choose it below. The header and footer also come from this file.</p>
+        <p class="hint">Fields: <code>{{qualCode}}</code> <code>{{qualTitle}}</code> <code>{{programCode}}</code> <code>{{courseCode}}</code> <code>{{assessmentTask}}</code> <code>{{unitCode}}</code> <code>{{unitTitle}}</code> <code>{{footerLine}}</code>. The table row containing <code>{{appendixLabel}}</code> / <code>{{appendixTitle}}</code> is repeated once per appendix.</p>
+        <div class="row">
+          <button class="secondary" type="button" id="downloadCover">Download default cover template</button>
+          <button class="secondary" type="button" id="chooseCover">Use my own cover template…</button>
+          <input type="file" id="coverInput" accept=".docx" hidden>
+        </div>
+        <div class="hint" id="coverName">Using: default cover template</div>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">4</span> Build</h2>
+      <div class="row">
+        <button id="buildBtn" disabled>Build and download</button>
+        <button class="link" id="clearBtn" type="button">Clear documents</button>
+      </div>
+      <div class="error" id="buildError"></div>
+      <ul class="checks" id="checks"></ul>
+    </section>
+  </div>
+
+  <!-- ===================== ASSESSMENT CONVERTER ===================== -->
+  <div id="panel-assessment" role="tabpanel" aria-labelledby="tab-assessment" hidden>
+    <section class="card">
+      <h2>Assessment converter</h2>
+      <p class="lead">This tool will convert and combine documents into the RMIT <strong>Knowledge quiz</strong>, <strong>Practical</strong> and <strong>Product</strong> templates (assessor and student versions).</p>
+      <p>It's being built from example documents. In the meantime, the <a href="../">TVSC assessor guide converter</a> is available.</p>
+    </section>
+  </div>
+</main>
+
+<footer>Everything runs in your browser. No documents leave your computer.</footer>
+
+<script src="../vendor/jszip.min.js"></script>
+<script src="lib/docx-kit.js"></script>
+<script src="lib/appendices.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem('ab:' + k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem('ab:' + k, v); } catch {} },
+  };
+
+  // ---------- tabs
+  const tabs = [...document.querySelectorAll('[role=tab]')];
+  function showTab(id) {
+    for (const t of tabs) {
+      const on = t.id === id;
+      t.setAttribute('aria-selected', on);
+      $(t.getAttribute('aria-controls')).hidden = !on;
+    }
+    store.set('tab', id);
+  }
+  tabs.forEach((t) => t.addEventListener('click', () => showTab(t.id)));
+  if (store.get('tab') && $(store.get('tab'))) showTab(store.get('tab'));
+
+  // ---------- documents list
+  let docs = []; // { id, name, bytes, title, dropTitleIndex, fromHeading }
+  let nextId = 1;
+  const drop = $('drop'), fileInput = $('fileInput');
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  drop.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); drop.classList.add('over'); } });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files]); });
+  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+
+  async function addFiles(files) {
+    $('addError').textContent = '';
+    const bad = [];
+    for (const f of files) {
+      if (!/\.docx$/i.test(f.name)) { bad.push(f.name); continue; }
+      try {
+        const bytes = await f.arrayBuffer();
+        const zip = await JSZip.loadAsync(bytes);
+        if (!zip.file('word/document.xml')) throw new Error('not a Word document');
+        const t = await Appendices.readTitle(zip, f.name);
+        docs.push({ id: nextId++, name: f.name, bytes, title: t.title, dropTitleIndex: t.index, fromHeading: t.fromHeading });
+      } catch (err) { bad.push(f.name + ' (' + err.message + ')'); }
+    }
+    if (bad.length) $('addError').textContent = 'Skipped: ' + bad.join(', ') + '. Only .docx files can be added (re-save older .doc files as .docx).';
+    render();
+  }
+
+  function render() {
+    const ol = $('docs');
+    ol.innerHTML = '';
+    const start = parseInt($('startAt').value, 10) || 0;
+    docs.forEach((d, i) => {
+      const li = document.createElement('li');
+      li.className = 'doc'; li.draggable = true; li.dataset.id = d.id;
+      li.innerHTML = `<div class="num">Appendix ${start + i}</div>
+        <div><input type="text" aria-label="Appendix title for ${escapeHtml(d.name)}"><div class="fname"></div></div>
+        <div class="acts"><button class="icon" type="button" data-act="up" aria-label="Move up">↑</button><button class="icon" type="button" data-act="down" aria-label="Move down">↓</button><button class="icon" type="button" data-act="remove" aria-label="Remove">✕</button></div>`;
+      const input = li.querySelector('input');
+      input.value = d.title;
+      input.addEventListener('input', () => { d.title = input.value; });
+      li.querySelector('.fname').textContent = d.name + (d.fromHeading ? ' · its own title will be replaced by the appendix heading' : '');
+      li.querySelector('[data-act=up]').disabled = i === 0;
+      li.querySelector('[data-act=down]').disabled = i === docs.length - 1;
+      li.querySelector('.acts').addEventListener('click', (e) => {
+        const act = e.target.dataset.act; if (!act) return;
+        const idx = docs.indexOf(d);
+        if (act === 'remove') docs.splice(idx, 1);
+        if (act === 'up' && idx > 0) [docs[idx - 1], docs[idx]] = [docs[idx], docs[idx - 1]];
+        if (act === 'down' && idx < docs.length - 1) [docs[idx + 1], docs[idx]] = [docs[idx], docs[idx + 1]];
+        render();
+      });
+      li.addEventListener('dragstart', (e) => { li.classList.add('dragging'); e.dataTransfer.setData('text/plain', String(d.id)); e.dataTransfer.effectAllowed = 'move'; });
+      li.addEventListener('dragend', () => li.classList.remove('dragging'));
+      li.addEventListener('dragover', (e) => { if (!e.dataTransfer.types.includes('Files')) e.preventDefault(); });
+      li.addEventListener('drop', (e) => {
+        const from = docs.findIndex((x) => String(x.id) === e.dataTransfer.getData('text/plain'));
+        if (from < 0) return;
+        e.preventDefault();
+        const [moved] = docs.splice(from, 1);
+        docs.splice(docs.indexOf(d) + (from <= docs.indexOf(d) ? 1 : 0), 0, moved);
+        render();
+      });
+      ol.appendChild(li);
+    });
+    $('emptyMsg').hidden = docs.length > 0;
+    $('buildBtn').disabled = docs.length === 0;
+  }
+  const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  $('clearBtn').addEventListener('click', () => { docs = []; $('checks').innerHTML = ''; render(); });
+
+  // ---------- details (remembered on this computer)
+  const FIELDS = ['unitCode', 'assessmentTask', 'unitTitle', 'qualCode', 'programCode', 'qualTitle'];
+  for (const f of FIELDS) {
+    const v = store.get(f); if (v) $(f).value = v;
+    $(f).addEventListener('input', () => { store.set(f, $(f).value); autoFill(); });
+  }
+  let footerEdited = false, fileEdited = false;
+  $('footerLine').addEventListener('input', () => { footerEdited = $('footerLine').value !== ''; });
+  $('fileName').addEventListener('input', () => { fileEdited = $('fileName').value !== ''; });
+  function info() {
+    const o = Object.fromEntries(FIELDS.map((f) => [f, $(f).value.trim()]));
+    o.footerLine = $('footerLine').value.trim();
+    o.fileName = $('fileName').value.trim();
+    return o;
+  }
+  function autoFill() {
+    const i = info();
+    if (!footerEdited) $('footerLine').value = Appendices.defaultFooter(i);
+    if (!fileEdited) $('fileName').value = Appendices.defaultFileName(i);
+  }
+  autoFill();
+
+  // ---------- options
+  $('optHeadings').addEventListener('change', () => {
+    $('headingOpts').hidden = !$('optHeadings').checked;
+    $('pageBreakOpt').hidden = $('optHeadings').checked;
+  });
+  $('startAt').addEventListener('input', render);
+
+  // ---------- cover template
+  let customCover = null;
+  $('chooseCover').addEventListener('click', () => $('coverInput').click());
+  $('coverInput').addEventListener('change', async () => {
+    const f = $('coverInput').files[0]; if (!f) return;
+    customCover = await f.arrayBuffer();
+    $('coverName').textContent = 'Using: ' + f.name;
+  });
+  async function coverBytes() {
+    if (customCover) return customCover;
+    const res = await fetch('templates/appendix-cover.docx');
+    if (!res.ok) throw new Error('Could not load the cover template (' + res.status + '). If you opened this page as a local file, use the hosted version.');
+    return res.arrayBuffer();
+  }
+  $('downloadCover').addEventListener('click', async () => {
+    try { saveBlob(new Blob([await (await fetch('templates/appendix-cover.docx')).arrayBuffer()]), 'RMIT_Student_Appendices_Cover_Template.docx'); }
+    catch (err) { $('buildError').textContent = err.message; }
+  });
+
+  function saveBlob(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  // ---------- build
+  $('buildBtn').addEventListener('click', async () => {
+    const btn = $('buildBtn'); btn.disabled = true; $('buildError').textContent = ''; $('checks').innerHTML = '';
+    try {
+      const i = info();
+      if (!i.footerLine) i.footerLine = Appendices.defaultFooter(i);
+      const headings = $('optHeadings').checked;
+      const opts = {
+        combine: document.querySelector('input[name=combine]:checked').value === 'yes',
+        includeCover: $('optCover').checked,
+        headings,
+        headingWord: $('headingWord').value.trim() || 'APPENDIX',
+        startAt: parseInt($('startAt').value, 10) || 0,
+        restyle: document.querySelector('input[name=restyle]:checked').value === 'yes',
+        pageBreaks: headings ? true : $('optPageBreaks').checked,
+      };
+      const list = docs.map((d) => ({ bytes: d.bytes, name: d.name, title: d.title.trim() || d.name.replace(/\.docx$/i, ''), dropTitleIndex: d.fromHeading ? d.dropTitleIndex : -1 }));
+      const { files, report } = await Appendices.build((b) => JSZip.loadAsync(b), await coverBytes(), list, i, opts);
+      const mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      let downloaded;
+      if (files.length === 1) {
+        let name = files[0].name; if (!/\.docx$/i.test(name)) name += '.docx';
+        saveBlob(await files[0].zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: mime }), name);
+        downloaded = name;
+      } else {
+        const bundle = new JSZip();
+        for (const f of files) bundle.file(f.name, await f.zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }));
+        downloaded = (i.fileName || Appendices.defaultFileName(i)).replace(/\.docx$/i, '') + '.zip';
+        saveBlob(await bundle.generateAsync({ type: 'blob' }), downloaded);
+      }
+      const add = (cls, text) => { const li = document.createElement('li'); li.className = cls; li.textContent = text; $('checks').appendChild(li); };
+      add('ok', `✓ Downloaded ${downloaded}` + (files.length > 1 ? ` (${files.length} files)` : ''));
+      if (opts.includeCover) add('ok', '✓ Cover page added' + (opts.combine ? ` with ${docs.length} appendices listed` : ' to each file'));
+      for (const d of report.documents) add('ok', `✓ ${d.heading}: ${d.words.toLocaleString()} words, ${d.tables} table${d.tables === 1 ? '' : 's'}`);
+      for (const w of report.warnings) add('warn', '! ' + w);
+    } catch (err) {
+      console.error(err); $('buildError').textContent = 'Build failed: ' + err.message;
+    } finally { btn.disabled = docs.length === 0; }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
