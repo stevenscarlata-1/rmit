@@ -136,6 +136,9 @@
   /** Remove off-brand fonts/colours so text inherits the RMIT theme. */
   function scrubFormatting(xml) {
     return xml
+      // character spacing (condensed/expanded text) — typically left over
+      // from PDF→Word conversion; in the RMIT font it swallows spaces
+      .replace(/<w:spacing w:val="-?\d+"\/>/g, '')
       .replace(/<w:rFonts\b[^>]*\/>/g, (tag) => {
         // keep only complex-script / east-asian hints; drop explicit Latin fonts
         const keep = (tag.match(/\sw:(?:cs|cstheme|eastAsia|eastAsiaTheme|hint)="[^"]*"/g) || []).join('');
@@ -225,6 +228,23 @@
     return dstXml.replace(d[0], root);
   }
 
+  /** Style ids whose definition (or basedOn chain) applies list numbering. */
+  function numberedStyleIds(stylesXml) {
+    const defs = {};
+    for (const m of stylesXml.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"[^>]*>[\s\S]*?<\/w:style>/g)) defs[m[1]] = m[0];
+    const out = new Set();
+    for (const id of Object.keys(defs)) {
+      let cur = id;
+      for (let hops = 0; cur && defs[cur] && hops < 10; hops++) {
+        const pPr = (/<w:pPr>[\s\S]*?<\/w:pPr>/.exec(defs[cur]) || [''])[0];
+        const num = /<w:numId w:val="(\d+)"/.exec(pPr);
+        if (num) { if (num[1] !== '0') out.add(id); break; }
+        cur = (/<w:basedOn w:val="([^"]+)"/.exec(defs[cur]) || [])[1];
+      }
+    }
+    return out;
+  }
+
   const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', emf: 'image/x-emf', wmf: 'image/x-wmf', svg: 'image/svg+xml', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff' };
   const hex8 = () => Array.from({ length: 8 }, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join('');
 
@@ -243,6 +263,7 @@
       const nf = shellZip.file('word/numbering.xml');
       o.numbering = nf ? await nf.async('string') : null;
       o.styleIds = new Set([...o.styles.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"/g)].map((m) => m[1]));
+      o.numberedStyles = numberedStyleIds(o.styles);
       o.relCounter = 1;
       o.mediaCounter = 1;
       o.bookmarkOffset = 100000;
@@ -307,15 +328,27 @@
     /**
      * Bring a source document's body into this package and return its XML.
      * opts.restyle: true = RMIT look (fonts, tables); false = keep formatting.
-     * opts.dropIndex: index of one body element to leave out (e.g. the title).
+     * opts.dropIndex: index (or array of indexes) of body elements to leave out (e.g. the title).
      */
     async importBody(srcZip, opts = {}) {
       const label = opts.label || 'document';
       const srcDoc = await srcZip.file('word/document.xml').async('string');
       this.doc = mergeRootNamespaces(this.doc, srcDoc, 'w:document');
       let items = splitTop(inner(srcDoc, 'w:body').content).filter((i) => i.tag !== 'w:sectPr');
-      if (opts.dropIndex >= 0) items = items.filter((_, i) => i !== opts.dropIndex);
+      const drop = new Set([].concat(opts.dropIndex ?? []).filter((i) => i >= 0));
+      if (drop.size) items = items.filter((_, i) => !drop.has(i));
+      // Trailing blank paragraphs / page breaks would push the next document
+      // (which starts on its own page) onto a page after an empty one.
+      const isBlank = (it) => it.tag === 'w:p' && !clean(textOf(it.xml)) &&
+        !/<w:(?:drawing|pict|object|fldSimple|fldChar)\b|<m:oMath/.test(it.xml);
+      while (items.length && isBlank(items[items.length - 1])) items.pop();
       let xml = items.map((i) => i.xml).join('');
+      // Some converters mark xml:space="preserve" once on the document root
+      // instead of on each text run. The RMIT shell's root has no such
+      // marker, so carry it onto the runs or space-only runs vanish.
+      if (/<w:document\b[^>]*\sxml:space="preserve"/.test(srcDoc)) {
+        xml = xml.replace(/<w:(t|instrText|delText)(?![^>]*xml:space)(\s[^>]*)?>/g, (_, tag, attrs) => `<w:${tag}${attrs || ''} xml:space="preserve">`);
+      }
 
       // section breaks inside the source become page breaks
       xml = xml.replace(/<w:p\b[^>]*>(?:(?!<\/w:p>)[\s\S])*?<w:sectPr\b[\s\S]*?<\/w:sectPr>[\s\S]*?<\/w:p>/g, (p) =>
@@ -373,7 +406,17 @@
         .replace(/<w:pPr>\s*<\/w:pPr>/g, '');
 
       // styles the content needs
-      await this.importStyles(srcZip, xml, opts.restyle);
+      const srcNumbered = await this.importStyles(srcZip, xml, opts.restyle);
+      // The shell's heading styles may carry automatic numbering (e.g. the
+      // RMIT "Section A / B / C" headings). Content that was not numbered in
+      // its own document must not pick that up.
+      xml = xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (p) => {
+        const st = styleOf(p);
+        if (!st || !this.numberedStyles.has(st) || srcNumbered.has(st)) return p;
+        if (/<w:numPr>/.test((/<w:pPr>[\s\S]*?<\/w:pPr>/.exec(p) || [''])[0])) return p;
+        return p.replace(/(<w:pPr>(?:\s*<w:(?:pStyle|keepNext|keepLines|pageBreakBefore|framePr|widowControl)\b[^>]*\/>|\s*<w:framePr\b[^>]*>[\s\S]*?<\/w:framePr>)*)/,
+          '$1<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>');
+      });
 
       if (opts.restyle) {
         xml = scrubFormatting(xml);
@@ -384,7 +427,7 @@
 
     async importStyles(srcZip, xml, restyle) {
       const sf = srcZip.file('word/styles.xml');
-      if (!sf) return;
+      if (!sf) return new Set();
       const src = await sf.async('string');
       const defs = {};
       for (const s of splitTop(inner(src, 'w:styles').content)) {
@@ -410,6 +453,7 @@
       }
       if (add.length) this.styles = this.styles.replace('</w:styles>', add.join('') + '</w:styles>');
       this.styles = mergeRootNamespaces(this.styles, src, 'w:styles');
+      return numberedStyleIds(src);
     }
 
     /** Write the body and all changed parts; returns the JSZip. */

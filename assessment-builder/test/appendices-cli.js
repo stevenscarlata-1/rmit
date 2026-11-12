@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Usage: node test/appendices-cli.js [--separate] [--no-cover] [--keep-format] doc1.docx doc2.docx ...
+// Usage: node test/appendices-cli.js [--separate] [--no-cover] [--keep-format] [--unitCode=X --assessmentTask=AT1 ...] doc1.docx ...
 // Builds student appendices with the same code the web page uses.
 const fs = require('fs');
 const path = require('path');
@@ -8,7 +8,8 @@ const A = require('../lib/appendices.js');
 
 (async () => {
   const args = process.argv.slice(2);
-  const flags = new Set(args.filter((a) => a.startsWith('--')));
+  const flags = new Set(args.filter((a) => a.startsWith('--') && !a.includes('=')));
+  const sets = Object.fromEntries(args.filter((a) => /^--\w+=/.test(a)).map((a) => a.slice(2).split(/=(.*)/s).slice(0, 2)));
   const inputs = args.filter((a) => !a.startsWith('--'));
   if (!inputs.length) {
     console.error('Usage: node test/appendices-cli.js [--separate] [--no-cover] [--keep-format] doc1.docx ...');
@@ -19,11 +20,12 @@ const A = require('../lib/appendices.js');
   for (const f of inputs) {
     const bytes = fs.readFileSync(f);
     const t = await A.readTitle(await load(bytes), path.basename(f));
-    docs.push({ bytes, name: path.basename(f), title: t.title, dropTitleIndex: t.index });
+    docs.push({ bytes, name: path.basename(f), title: t.title, dropTitleIndex: t.fromHeading ? t.index : -1 });
   }
   const info = {
     qualCode: '22682VIC', qualTitle: 'Certificate II in Electrotechnology (Pre-vocational)', programCode: 'C2229',
     assessmentTask: 'AT2', unitCode: 'VU23735', unitTitle: 'Install sustainable extra low voltage energy supply systems',
+    ...sets,
   };
   const cover = fs.readFileSync(path.join(__dirname, '../templates/appendix-cover.docx'));
   const { files, report } = await A.build(load, cover, docs, info, {

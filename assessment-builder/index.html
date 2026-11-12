@@ -227,16 +227,25 @@
     $('addError').textContent = '';
     const bad = [];
     for (const f of files) {
-      if (!/\.docx$/i.test(f.name)) { bad.push(f.name); continue; }
+      if (!/\.docx$/i.test(f.name)) {
+        const ext = (f.name.match(/\.(\w+)$/) || [, ''])[1].toLowerCase();
+        const how = {
+          odt: 'is an OpenDocument (.odt) file. Open it in Word or LibreOffice and use File → Save As → Word Document (.docx)',
+          doc: 'is an older Word (.doc) file. Open it in Word and use File → Save As → Word Document (.docx)',
+          pdf: 'is a PDF. Use the original Word file, or open the PDF in Word (File → Open), check the layout, and save it as .docx',
+        }[ext] || 'is not a Word .docx file';
+        bad.push(`“${f.name}” ${how}.`);
+        continue;
+      }
       try {
         const bytes = await f.arrayBuffer();
         const zip = await JSZip.loadAsync(bytes);
         if (!zip.file('word/document.xml')) throw new Error('not a Word document');
         const t = await Appendices.readTitle(zip, f.name);
         docs.push({ id: nextId++, name: f.name, bytes, title: t.title, dropTitleIndex: t.index, fromHeading: t.fromHeading });
-      } catch (err) { bad.push(f.name + ' (' + err.message + ')'); }
+      } catch (err) { bad.push(`“${f.name}” could not be read (${err.message}).`); }
     }
-    if (bad.length) $('addError').textContent = 'Skipped: ' + bad.join(', ') + '. Only .docx files can be added (re-save older .doc files as .docx).';
+    if (bad.length) $('addError').textContent = 'Not added: ' + bad.join(' ') + ' Then add it again.';
     render();
   }
 

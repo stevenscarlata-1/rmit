@@ -72,10 +72,30 @@
    * Read a source document's suggested title (for the appendix heading).
    * Returns { title, index, fromHeading }.
    */
+  // "Appendix 3:", "APPENDIX 2 –", "Appendix 1." at the start of a title
+  const PREFIX = /^\s*appendix\s*[0-9A-Z]{1,3}\s*[:\-–—.]?\s*/i;
+
   async function readTitle(srcZip, fileName) {
-    const fallback = fileName.replace(/\.docx$/i, '').replace(/[_-]+/g, ' ').trim();
-    return K.guessTitle(srcZip, fallback);
+    const fallback = fileName.replace(/\.docx$/i, '').replace(/^[A-Z]{2,}\d{3,}[A-Z]?_AT\d+_/i, '')
+      .replace(/_v\d+(\.\d+)*$/i, '').replace(/^appendix_?\d+_*/i, '').replace(/[_-]+/g, ' ').trim();
+    const t = await K.guessTitle(srcZip, fallback);
+    if (!PREFIX.test(t.title)) return t;
+    // The document already numbers itself ("Appendix 1: Job cards"). Keep
+    // only the title text; the builder adds its own "APPENDIX N:".
+    const rest = t.title.replace(PREFIX, '').trim();
+    if (rest) return { ...t, title: rest };
+    // Title split over two lines ("Appendix 2:" then the title): use the
+    // next non-empty paragraph and drop both.
+    const doc = await srcZip.file('word/document.xml').async('string');
+    const items = K.splitTop(K.inner(doc, 'w:body').content);
+    for (let j = t.index + 1; j < items.length && j <= t.index + 4; j++) {
+      if (items[j].tag !== 'w:p') break;
+      const next = K.clean(K.textOf(items[j].xml));
+      if (next) return { title: next.slice(0, 160), index: [...range(t.index, j)], fromHeading: t.fromHeading };
+    }
+    return { ...t, title: fallback };
   }
+  function* range(a, b) { for (let i = a; i <= b; i++) yield i; }
 
   /**
    * Build the appendices.
