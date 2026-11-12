@@ -188,9 +188,9 @@
 
 <footer>Everything runs in your browser. No documents leave your computer.</footer>
 
-<script src="../vendor/jszip.min.js"></script>
-<script src="lib/docx-kit.js"></script>
-<script src="lib/appendices.js"></script>
+<script src="../vendor/jszip.min.js?v=3.10.1"></script>
+<script src="lib/docx-kit.js?v=3"></script>
+<script src="lib/appendices.js?v=3"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -332,12 +332,12 @@
   });
   async function coverBytes() {
     if (customCover) return customCover;
-    const res = await fetch('templates/appendix-cover.docx');
+    const res = await fetch('templates/appendix-cover.docx?v=3');
     if (!res.ok) throw new Error('Could not load the cover template (' + res.status + '). If you opened this page as a local file, use the hosted version.');
     return res.arrayBuffer();
   }
   $('downloadCover').addEventListener('click', async () => {
-    try { saveBlob(new Blob([await (await fetch('templates/appendix-cover.docx')).arrayBuffer()]), 'RMIT_Student_Appendices_Cover_Template.docx'); }
+    try { saveBlob(new Blob([await (await fetch('templates/appendix-cover.docx?v=3')).arrayBuffer()]), 'RMIT_Student_Appendices_Cover_Template.docx'); }
     catch (err) { $('buildError').textContent = err.message; }
   });
 

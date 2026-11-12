@@ -121,6 +121,10 @@
 
     for (const group of groups) {
       const out = await K.Output.open(await loadZip(coverBytes));
+      // Appendices never use the assessment guides' "Section A/B/C" heading
+      // numbering, even if a custom cover template's heading styles have it.
+      out.styles = out.styles.replace(/<w:style\b[^>]*w:styleId="(Heading\d|Title)"[^>]*>[\s\S]*?<\/w:style>/g, (st) => st.replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, ''));
+      for (const id of [...out.numberedStyles]) if (/^(Heading\d|Title)$/.test(id)) out.numberedStyles.delete(id);
       const parts = [];
       if (o.includeCover) {
         let cover = out.shellBody();

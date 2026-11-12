@@ -7,6 +7,11 @@ const fs = require('fs');
 const JSZip = require('jszip');
 const K = require('../lib/docx-kit.js');
 
+function unnumberHeadings(styles) {
+  return styles.replace(/<w:style\b[^>]*w:styleId="(Heading\d|Title)"[^>]*>[\s\S]*?<\/w:style>/g, (st) =>
+    st.replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, ''));
+}
+
 const replaceParagraph = (xml, match, text) => {
   let hits = 0;
   const out = xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (p) => {
@@ -59,6 +64,9 @@ const replaceParagraph = (xml, match, text) => {
     f = f.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (p) => (/\|\s*Student appendices/i.test(K.clean(K.textOf(p))) ? K.setParagraphText(p, '{{footerLine}}') : p));
     zip.file(name, f);
   }
+  // Appendices never use the assessment guides' automatic "Section A/B/C"
+  // heading numbering: take it out of the heading styles.
+  zip.file('word/styles.xml', unnumberHeadings(await zip.file('word/styles.xml').async('string')));
   const core = zip.file('docProps/core.xml');
   if (core) zip.file('docProps/core.xml', (await core.async('string')).replace(/<dc:title>[\s\S]*?<\/dc:title>/, '<dc:title>Student assessment appendices</dc:title>'));
   fs.writeFileSync(out, await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
